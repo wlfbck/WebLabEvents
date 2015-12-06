@@ -1,21 +1,22 @@
-13.00 Weblab Freitags
-apache storm / hadoop
-
-ARMA/ARIMA
-
 Forecasting-Buch:
 https://www.otexts.org/fpp
-Modeling procedure für ARIMA: https://www.otexts.org/fpp/8/7
 
-AIC als maß
+AIC als Maß
 http://www.r-bloggers.com/arma-models-for-trading/
 
 http://www.r-bloggers.com/forecasting-with-daily-data/
 http://stats.stackexchange.com/questions/144158/daily-time-series-analysis
 
+R Forecast-library doc:
+https://cran.r-project.org/web/packages/forecast/forecast.pdf
+
+R-Plot formatieren:
+http://stackoverflow.com/questions/10302261/forecasting-time-series-data
+
 Generelle ARIMA-Gleichung mit Erklärung:
 https://www.otexts.org/fpp/8/5
 Die übliche Notation im die Klasse eines ARIMAs festzulegen ist (p,d,q) (in mehreren Quellen gefunden), dabei steht p für den Grad (Anzahl vorheriger Werte) des AR-Teils, d für den Grad des differencing, q für den Grad des MA-Teils
+Fitted values sind die Werte, durch die die Modelkurve an der Stelle der Trainingsdaten geht. Der Unterschied zwischen fitted value und echtem Wert ist der residual.
 
 Notationsnotizen:
 AR(n) n steht für Anzahl der vorherigen Werte die benutzt werden

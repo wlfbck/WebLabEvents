@@ -6,11 +6,14 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.TreeMap;
+import org.rosuda.JRI.RVector;
 import org.rosuda.JRI.Rengine;
 
 public class ReadStream {
+
     public static void main(String[] args) throws IOException {
         ReadStream rs = new ReadStream();
         System.out.println("Processing Tweets");
@@ -48,9 +51,10 @@ public class ReadStream {
         int forecastReach = 20;
 
         rEngine.assign("v", dailySumVector);
+        rEngine.eval("startDate <- c(" + dailySum.firstKey() + ")");
         //use 365.25 to account for leap years - but points get ugly then...
         //including leap stuff, weekends etc is really complicated
-        rEngine.eval("tseries <- ts(v, start=c(" + dailySum.firstKey() + "),frequency=365)");
+        rEngine.eval("tseries <- ts(v, start=c(startDate),frequency=365)");
         rEngine.eval("library(forecast)");
         rEngine.eval("autoModel <- auto.arima(tseries)");
         rEngine.eval("autoForecast <- forecast(autoModel,h=" + forecastReach + ")");
@@ -58,14 +62,26 @@ public class ReadStream {
         rEngine.eval("jpeg('yolo.jpeg')");
         rEngine.eval("plot(autoForecast)");
         rEngine.eval("dev.off()");
-        
-        //TODO: get subwindows
-        //R command: window(tseries, end=c(end(tseries)[1],end(tseries)[2]-3))
-        //end(tseries)[1] is the end-year = (2015 for current data)
-        //end(tseries)[2]-3 is the end-day minus 3 = (209 for current data)
-        
-        //TODO: compare forecast for subwindows and see how they match up with the real data.
-        //4 latter columns in output specify likelihood thresholds. maybe use those?
+
+        System.out.println(Arrays.toString(dailySumVector));
+        //need atleast a couple of values for reasonable training
+        for (int i = 4; i < dailySumVector.length-1; i++) {
+            //with i = 0 you get only the first value, NOT an empty window
+            rEngine.eval("subWin <- window(tseries, end=(c(startDate[1],startDate[2]+" + i + ")))");
+            rEngine.eval("subForecast <- forecast(auto.arima(subWin),h=1)");
+            double[] upperLimit = rEngine.eval("subForecast$upper").asDoubleArray();
+            //high95 check
+            if(upperLimit[1] < dailySumVector[i+1]) {
+                System.out.println("event??");
+                System.out.println("forecast: " + rEngine.eval("as.numeric(subForecast$mean)").asDouble());
+                System.out.println("upperlimit95: " + upperLimit[1]);
+                System.out.println("actual: " + dailySumVector[i+1]);
+            }
+            
+            //tseries[41] = event?
+            //tseries[46] = event?
+            //tsereis[54/55] = event!!!
+        }
         
         //TODO: seasonal stuff, differencing, etc
     }
