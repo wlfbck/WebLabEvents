@@ -7,26 +7,28 @@ import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.nio.file.Paths;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.ArrayList;
 import java.util.LinkedList;
-import java.util.Locale;
 import java.util.TreeMap;
 import org.rosuda.JRI.RMainLoopCallbacks;
 import org.rosuda.JRI.Rengine;
 
 class TextConsole implements RMainLoopCallbacks {
+    
+    //TODO: are these methods even needed?
 
+    @Override
     public void rWriteConsole(Rengine re, String text, int oType) {
         System.out.print(text);
     }
 
+    @Override
     public void rBusy(Rengine re, int which) {
         System.out.println("rBusy(" + which + ")");
     }
 
+    @Override
     public String rReadConsole(Rengine re, String prompt, int addToHistory) {
         System.out.print(prompt);
         try {
@@ -39,10 +41,12 @@ class TextConsole implements RMainLoopCallbacks {
         return null;
     }
 
+    @Override
     public void rShowMessage(Rengine re, String message) {
         System.out.println("rShowMessage \"" + message + "\"");
     }
 
+    @Override
     public String rChooseFile(Rengine re, int newFile) {
         FileDialog fd = new FileDialog(new Frame(), (newFile == 0) ? "Select a file" : "Select a new file", (newFile == 0) ? FileDialog.LOAD : FileDialog.SAVE);
         fd.show();
@@ -56,12 +60,15 @@ class TextConsole implements RMainLoopCallbacks {
         return res;
     }
 
+    @Override
     public void rFlushConsole(Rengine re) {
     }
 
+    @Override
     public void rLoadHistory(Rengine re, String filename) {
     }
 
+    @Override
     public void rSaveHistory(Rengine re, String filename) {
     }
 }
@@ -70,12 +77,11 @@ public class ReadStream {
 
     public static void main(String[] args) throws IOException {
         ReadStream rs = new ReadStream();
+        System.out.println("Processing Tweets");
         rs.processTweets();
+        System.out.println("Done, exiting");
         rs.exit();
     }
-
-    //List to store every single tweet as String
-    LinkedList<String> tweetListString = new LinkedList<>();
 
     //List to store every single tweet as Tweet
     LinkedList<Tweet> tweetList = new LinkedList<>();
@@ -88,7 +94,8 @@ public class ReadStream {
     public ReadStream() throws IOException {
         //Start reading tweets from file
         System.out.println("Reading Tweets....");
-        readTweets();
+        //readTweets("preprocessedTweets.txt");
+        readTweets("preprocessedTweets_june_july_2015_AMZN_cleaned.txt");
 
         //Test R
         if (!rEngine.waitForR()) {
@@ -105,14 +112,26 @@ public class ReadStream {
         int forecastReach = 20;
 
         rEngine.assign("v", dailySumVector);
-        //365.25 to account for leap years
-        rEngine.eval("tseries <- ts(v, start=c(" + dailySum.firstKey() + "), end=c(" + dailySum.lastKey() + "),frequency=365.25)");
-        System.out.println(rEngine.eval("library(forecast)"));
-        rEngine.eval("autoModel <- auto.arima(v)");
+        //use 365.25 to account for leap years - but points get ugly then...
+        //including leap stuff, weekends etc is really complicated
+        rEngine.eval("tseries <- ts(v, start=c(" + dailySum.firstKey() + "),frequency=365)");
+        rEngine.eval("library(forecast)");
+        rEngine.eval("autoModel <- auto.arima(tseries)");
         rEngine.eval("autoForecast <- forecast(autoModel,h=" + forecastReach + ")");
+        rEngine.eval("write.table(autoForecast,'output.txt')");
         rEngine.eval("jpeg('yolo.jpeg')");
         rEngine.eval("plot(autoForecast)");
         rEngine.eval("dev.off()");
+        
+        //TODO: get subwindows
+        //R command: window(tseries, end=c(end(tseries)[1],end(tseries)[2]-3))
+        //end(tseries)[1] is the end-year = (2015 for current data)
+        //end(tseries)[2]-3 is the end-day minus 3 = (209 for current data)
+        
+        //TODO: compare forecast for subwindows and see how they match up with the real data.
+        //4 latter columns in output specify likelihood thresholds. maybe use those?
+        
+        //TODO: seasonal stuff, differencing, etc
     }
 
     public void execute(Tweet t) {
@@ -124,17 +143,12 @@ public class ReadStream {
         }
     }
 
-    private void readTweets() throws FileNotFoundException, IOException {
+    private void readTweets(String filename) throws FileNotFoundException, IOException {
         //Read the file
-        String fileName = Paths.get("preprocessedTweets.txt").toAbsolutePath().toString();
-        BufferedReader br = new BufferedReader(new FileReader(fileName));
+        BufferedReader br = new BufferedReader(new FileReader(filename));
         String fileLine;
 
-        //TODO ES MÜSSEN NOCH ALLE "\n" innerhalb eines Tweets entfernt werden, sonst können wir nicht Zeilenweise einlesen  
         while ((fileLine = br.readLine()) != null) {
-            //Add a single tweet to the stringlist
-            tweetListString.add(fileLine);
-
             //Delete "{", "}", "\n" from the tweet
             fileLine = fileLine.replace("{", "");
             fileLine = fileLine.replace("}", "");
@@ -142,21 +156,19 @@ public class ReadStream {
             //Split tweet at ";" and fill tweet List
             String[] tweetData = fileLine.split(";");
 
-            //System.out.println(fileLine);
-            //System.out.println("| 0: " + tweetData[0] + " \n| 1:" + tweetData[1] + " \n| 2: " + tweetData[2] + " \n| 3: " + tweetData[3] + "\n");
-            //Parsing string into tweet - ID
+            //ID
             double tweetId = Double.parseDouble(tweetData[0]);
 
-            //Parsing string into tweet - Date
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE MMM d HH:mm:ss zzz yyyy", Locale.ENGLISH);
+            //Date
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE MMM d HH:mm:ss zzz yyyy");
             LocalDateTime tweetDate = LocalDateTime.parse(tweetData[1], formatter);
 
-            //Parsing string into tweet - Hashtag
+            //Hashtag
             tweetData[2] = tweetData[2].replace("[", "");
             tweetData[2] = tweetData[2].replace("]", "");
             String[] tweetHashtag = tweetData[2].split(",");
 
-            //Parsing string into tweet - Text
+            //Full Text
             String tweetText = tweetData[3];
 
             //Creating new tweet
@@ -165,7 +177,7 @@ public class ReadStream {
             //Add tweet to tweetList
             tweetList.add(t);
         }
-        //Finsihed reading, closing BufferedReader
+        //Finished reading, closing BufferedReader
         br.close();
     }
 
