@@ -1,80 +1,16 @@
 package main;
 
-import java.awt.FileDialog;
-import java.awt.Frame;
 import java.io.BufferedReader;
 import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedList;
 import java.util.TreeMap;
-import org.rosuda.JRI.RMainLoopCallbacks;
 import org.rosuda.JRI.Rengine;
 
-class TextConsole implements RMainLoopCallbacks {
-    
-    //TODO: are these methods even needed?
-
-    @Override
-    public void rWriteConsole(Rengine re, String text, int oType) {
-        System.out.print(text);
-    }
-
-    @Override
-    public void rBusy(Rengine re, int which) {
-        System.out.println("rBusy(" + which + ")");
-    }
-
-    @Override
-    public String rReadConsole(Rengine re, String prompt, int addToHistory) {
-        System.out.print(prompt);
-        try {
-            BufferedReader br = new BufferedReader(new InputStreamReader(System.in));
-            String s = br.readLine();
-            return (s == null || s.length() == 0) ? s : s + "\n";
-        } catch (Exception e) {
-            System.out.println("jriReadConsole exception: " + e.getMessage());
-        }
-        return null;
-    }
-
-    @Override
-    public void rShowMessage(Rengine re, String message) {
-        System.out.println("rShowMessage \"" + message + "\"");
-    }
-
-    @Override
-    public String rChooseFile(Rengine re, int newFile) {
-        FileDialog fd = new FileDialog(new Frame(), (newFile == 0) ? "Select a file" : "Select a new file", (newFile == 0) ? FileDialog.LOAD : FileDialog.SAVE);
-        fd.show();
-        String res = null;
-        if (fd.getDirectory() != null) {
-            res = fd.getDirectory();
-        }
-        if (fd.getFile() != null) {
-            res = (res == null) ? fd.getFile() : (res + fd.getFile());
-        }
-        return res;
-    }
-
-    @Override
-    public void rFlushConsole(Rengine re) {
-    }
-
-    @Override
-    public void rLoadHistory(Rengine re, String filename) {
-    }
-
-    @Override
-    public void rSaveHistory(Rengine re, String filename) {
-    }
-}
-
 public class ReadStream {
-
     public static void main(String[] args) throws IOException {
         ReadStream rs = new ReadStream();
         System.out.println("Processing Tweets");
