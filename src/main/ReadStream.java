@@ -6,10 +6,8 @@ import java.io.FileReader;
 import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.TreeMap;
-import org.rosuda.JRI.RVector;
 import org.rosuda.JRI.Rengine;
 
 public class ReadStream {
@@ -63,7 +61,6 @@ public class ReadStream {
         rEngine.eval("plot(autoForecast)");
         rEngine.eval("dev.off()");
 
-        System.out.println(Arrays.toString(dailySumVector));
         //need atleast a couple of values for reasonable training
         for (int i = 4; i < dailySumVector.length-1; i++) {
             //with i = 0 you get only the first value, NOT an empty window
