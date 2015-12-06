@@ -1,0 +1,44 @@
+13.00 Weblab Freitags
+apache storm / hadoop
+
+ARMA/ARIMA
+
+Forecasting-Buch:
+https://www.otexts.org/fpp
+Modeling procedure für ARIMA: https://www.otexts.org/fpp/8/7
+
+AIC als maß
+http://www.r-bloggers.com/arma-models-for-trading/
+
+http://www.r-bloggers.com/forecasting-with-daily-data/
+http://stats.stackexchange.com/questions/144158/daily-time-series-analysis
+
+Generelle ARIMA-Gleichung mit Erklärung:
+https://www.otexts.org/fpp/8/5
+Die übliche Notation im die Klasse eines ARIMAs festzulegen ist (p,d,q) (in mehreren Quellen gefunden), dabei steht p für den Grad (Anzahl vorheriger Werte) des AR-Teils, d für den Grad des differencing, q für den Grad des MA-Teils
+
+Notationsnotizen:
+AR(n) n steht für Anzahl der vorherigen Werte die benutzt werden
+B_x/L_x stehen für Lag bzw. Backshift, heißt einfach nur das man von x den Wert eine "period" vorher nimmt. B^2_x ist dann 2 "periods" vorher.
+
+ARIMA-Ablauf:
+1. Model identifizieren (also p,d,q)
+->Autocorrelation / partial Autocorrelation, siehe auch R auto-Funktion
+->Müssen stationary und invertible sein
+-->stationary kann man sie zB über differencing machen (first-order/second-order/seasonal)
+--->um zu gucken ob differencing nötig ist gibts diese unit root tests (laut dem Buch)
+2. Parameter schätzen (c, und alle Vorfaktoren)
+->Ebenfalls siehe R auto-Funktion
+->R benutzt maximum likelihood estimation (hatte ich auch an anderer Stelle schon mal gelesen)
+3. Forecast
+->Selbst erklärend
+4. Model überprüfen
+->Im Grunde prüft man ja nur wie sehr die Voraussage erfüllt wurde, und passt ggf. sein Model an
+->Bin mir gerad nicht so sicher ob das so ganz relevant ist, schließlich bauen wir ja eh immer neue Modelle
+-->nochmal angucken inwiefern sich das auf die weitere Modellbildung auswirkt
+
+Ideen&Probleme:
+Wie ziehen wir hieraus ein Event?
+->1.Möglichkeit: Arima sagt steilen Anstieg voraus, er tritt auch ein
+->2.Möglichkeit: Model sagt einen moderaten Verlauf voraus, krasser Anstieg tritt ein
+https://www.otexts.org/fpp/8/5 in Figure 8.8 sieht man eine Verteilung, ich denke sowas sollte man dann benutzen mit Threshold-Unwahrscheinlichkeit um ein Event festzustellen?

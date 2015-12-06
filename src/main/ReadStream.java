@@ -102,15 +102,21 @@ public class ReadStream {
         }
         //Convert dailySum into a vector
         int[] dailySumVector = dailySum.values().stream().mapToInt(i -> i).toArray();
+        int forecastReach = 20;
 
         rEngine.assign("v", dailySumVector);
-        System.out.println(rEngine.eval("ts(v)"));
+        //365.25 to account for leap years
+        rEngine.eval("tseries <- ts(v, start=c(" + dailySum.firstKey() + "), end=c(" + dailySum.lastKey() + "),frequency=365.25)");
         System.out.println(rEngine.eval("library(forecast)"));
-        System.out.println(rEngine.eval("auto.arima(v)"));
+        rEngine.eval("autoModel <- auto.arima(v)");
+        rEngine.eval("autoForecast <- forecast(autoModel,h=" + forecastReach + ")");
+        rEngine.eval("jpeg('yolo.jpeg')");
+        rEngine.eval("plot(autoForecast)");
+        rEngine.eval("dev.off()");
     }
 
     public void execute(Tweet t) {
-        String str = t.getTweetDate().getDayOfYear() + " " + t.getTweetDate().getYear();
+        String str = t.getTweetDate().getYear() + "," + t.getTweetDate().getDayOfYear();
         if (dailySum.get(str) != null) {
             dailySum.put(str, dailySum.get(str) + 1);
         } else {
