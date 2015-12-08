@@ -22,48 +22,87 @@ import org.rosuda.JRI.Rengine;
  */
 
 public class ReadStream {
-
-    public static void main(String[] args) throws IOException {
-        ReadStream rs = new ReadStream();
-        System.out.println("Processing Tweets");
-        rs.processTweets();
-        System.out.println("Done, exiting");
-        rs.exit();
-    }
-
+	
     //List to store every single tweet as Tweet
     LinkedList<Tweet> tweetList = new LinkedList<>();
 
-    //List to store the daily sum of tweets, sorted by the day 
-
-    
-    
+    //List to store the daily sum of tweets for each hashtag
     TreeMap<String, TreeMap<String, Integer>> marketPlayer = new TreeMap<>();    
 
+    //Start date and current date for counting tweets
     String startDate = "";
     String currentDate = "";
     
-    
-    String [] args = {"--no-save"};
-    Rengine rEngine = new Rengine(args, false, new TextConsole());
+    //R engine to buildSum r code within Java. Replacing "null" with "new TextConsole()" will display the R console output 
+    String [] rArgs = {"--no-save"};
+    Rengine rEngine = new Rengine(rArgs, false, null);
 
+    //ReadStream constructor 
     public ReadStream() throws IOException {
-        //Start reading tweets from file
-        System.out.println("Reading Tweets....");
-        //readTweets("preprocessedTweets.txt");
-        readTweets("preprocessedTweets_june_july_2015_AMZN_cleaned.txt");
-
-        //Test R
+    	//Test if R is running 
         if (!rEngine.waitForR()) {
-            System.out.println("Cannot load R");
-        }
+            System.out.println("Cannot load R -> Exiting");
+            System.exit(0);
+        }       
     }
 
+    //Reading tweets from file, parsing them "Tweets" and store them in the "tweetList"
+    public void readTweets(String filename) throws FileNotFoundException, IOException {
+        //Read the given file per line
+        BufferedReader br = new BufferedReader(new FileReader(filename));
+        String fileLine;
+
+        while ((fileLine = br.readLine()) != null) {
+            //Delete "{" and "}" from the tweet
+            fileLine = fileLine.replace("{", "");
+            fileLine = fileLine.replace("}", "");
+
+            //Split tweet at ";" and fill tweetData
+            String[] tweetData = fileLine.split(";");
+
+            //Parse the tweet id
+            double tweetId = Double.parseDouble(tweetData[0]);
+
+            //Parse the tweet date
+            DateTimeFormatter tFormatter = DateTimeFormatter.ofPattern("EEE MMM d HH:mm:ss zzz yyyy", Locale.ENGLISH);
+            LocalDateTime tweetDate = LocalDateTime.parse(tweetData[1], tFormatter);
+
+            //Parse the tweet hashtag
+            tweetData[2] = tweetData[2].replace("[", "");
+            tweetData[2] = tweetData[2].replace("]", "");
+            String[] tweetHashtag = tweetData[2].split(",");
+            
+            //Trim hashtags
+            for(int i=0; i<tweetHashtag.length; i++) {
+            	tweetHashtag[i] = tweetHashtag[i].trim();
+            }
+           
+            //Remove duplicate hastags
+            tweetHashtag = new HashSet<String>(Arrays.asList(tweetHashtag)).toArray(new String[0]);
+            
+            //Parse the tweet text
+            String tweetText = tweetData[3];
+
+            //Just store vaild tweets in the "tweetList"
+            if (tweetHashtag.length > 0 && !tweetHashtag[0].equals("")) {
+                //Creating a new tweet
+                Tweet t = new Tweet(tweetId, tweetDate, tweetHashtag, tweetText);            	
+            	//Add tweet to tweetList
+                tweetList.add(t);
+            } 
+           
+        }
+        //Finished reading, closing BufferedReader
+        br.close();
+    }
+    
+    //Trying to find events, counting daily tweet sums for each hashtag and than calling Rs auto arima function
     public void processTweets() {
-        startDate = tweetList.getFirst().getTweetDate().getYear() + "," + tweetList.getFirst().getTweetDate().getDayOfYear();
+        //Setting the start date and current date for counting
+    	startDate = tweetList.getFirst().getTweetDate().getYear() + "," + tweetList.getFirst().getTweetDate().getDayOfYear();
         currentDate = startDate;
         
-        //Da Tweets in unsortierter riehenfolge vorliegen können, sortieren wir diese selber vor der verwarbeitung.
+        //Time ordering tweets 
         Collections.sort(tweetList,new Comparator<Tweet>(){
         	@Override
         	public int compare(final Tweet lhs,Tweet rhs) {        		
@@ -71,18 +110,21 @@ public class ReadStream {
         	}
         });
         
+        //Counting daily tweet sums for each hashtag
     	for (Tweet t : tweetList) {    		
-    		execute(t);                  
+    		buildSum(t);                  
         }
     	
+    	//Event detection by calling Rs auto arima function
         detectEventForMarketplayer("AMZN");
-        //TODO: seasonal stuff, differencing, etc
+        
+        //TODO: (??) seasonal stuff, differencing, etc
     }
 
+	//Event detection by calling Rs auto arima function
 	public void detectEventForMarketplayer(String stockSymbol) {
 		//Convert dailySum into a vector
         int[] dailySumVector = marketPlayer.get(stockSymbol).values().stream().mapToInt(i -> i).toArray();
-        System.out.println(Arrays.toString(dailySumVector));
         int forecastReach = 20;
 
         rEngine.assign("v", dailySumVector);
@@ -98,7 +140,7 @@ public class ReadStream {
         rEngine.eval("plot(autoForecast)");
         rEngine.eval("dev.off()");
 
-        //need atleast a couple of values for reasonable training
+        //need at least a couple of values for reasonable training
         for (int i = 4; i < dailySumVector.length-1; i++) {
             //with i = 0 you get only the first value, NOT an empty window
             rEngine.eval("subWin <- window(tseries, end=(c(startDate[1],startDate[2]+" + i + ")))");
@@ -106,15 +148,15 @@ public class ReadStream {
             double[] upperLimit = rEngine.eval("subForecast$upper").asDoubleArray();
             //high95 check
             if(upperLimit[1] < dailySumVector[i+1]) {
-                System.out.println("event??");
-                System.out.println("forecast: " + rEngine.eval("as.numeric(subForecast$mean)").asDouble());
-                System.out.println("upperlimit95: " + upperLimit[1]);
-                System.out.println("actual: " + dailySumVector[i+1]);
+                System.out.println("\nEvent (?):");
+                System.out.println("Forecast: " + rEngine.eval("as.numeric(subForecast$mean)").asDouble());
+                System.out.println("UpperLimit95: " + upperLimit[1]);
+                System.out.println("Actual: " + dailySumVector[i+1]);
             }
         }
 	}
 
-    public void execute(Tweet t) {
+    public void buildSum(Tweet t) {
         String tweetDate = t.getTweetDate().getYear() + "," + t.getTweetDate().getDayOfYear();
         
         if (!currentDate.equals(tweetDate)) {
@@ -155,54 +197,6 @@ public class ReadStream {
         		marketPlayer.get(h).put(currentDate, 1);       
         	}
         }
-
-
-        
-    }
-
-    private void readTweets(String filename) throws FileNotFoundException, IOException {
-        //Read the file
-        BufferedReader br = new BufferedReader(new FileReader(filename));
-        String fileLine;
-
-        while ((fileLine = br.readLine()) != null) {
-            //Delete "{", "}", "\n" from the tweet
-            fileLine = fileLine.replace("{", "");
-            fileLine = fileLine.replace("}", "");
-
-            //Split tweet at ";" and fill tweet List
-            String[] tweetData = fileLine.split(";");
-
-            //ID
-            double tweetId = Double.parseDouble(tweetData[0]);
-
-            //Date
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("EEE MMM d HH:mm:ss zzz yyyy", Locale.ENGLISH);
-            LocalDateTime tweetDate = LocalDateTime.parse(tweetData[1], formatter);
-
-            //Hashtag
-            tweetData[2] = tweetData[2].replace("[", "");
-            tweetData[2] = tweetData[2].replace("]", "");
-            String[] tweetHashtag = tweetData[2].split(",");
-            
-            for(int i=0; i<tweetHashtag.length; i++) {
-            	tweetHashtag[i] = tweetHashtag[i].trim();
-            }
-           
-            //Remove Duplicates TODO: Siehe Mail
-            tweetHashtag = new HashSet<String>(Arrays.asList(tweetHashtag)).toArray(new String[0]);
-            
-            //Full Text
-            String tweetText = tweetData[3];
-
-            //Creating new tweet
-            Tweet t = new Tweet(tweetId, tweetDate, tweetHashtag, tweetText);
-
-            //Add tweet to tweetList
-            tweetList.add(t);
-        }
-        //Finished reading, closing BufferedReader
-        br.close();
     }
 
     public void exit() {
