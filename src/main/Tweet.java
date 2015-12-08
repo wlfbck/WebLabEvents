@@ -3,6 +3,7 @@ package main;
 import java.time.LocalDateTime;
 import java.util.Arrays;
 
+//Class Tweet
 public class Tweet {
 	
 	private double tweetId;
