@@ -156,9 +156,12 @@ public class ReadStream {
         }
 	}
 
+	//Calculating daily sums of tweets for each hastag
     public void buildSum(Tweet t) {
-        String tweetDate = t.getTweetDate().getYear() + "," + t.getTweetDate().getDayOfYear();
+        //Building a string of the tweetDate 
+    	String tweetDate = t.getTweetDate().getYear() + "," + t.getTweetDate().getDayOfYear();
         
+    	//
         if (!currentDate.equals(tweetDate)) {
         	for(TreeMap<String, Integer> mPlayer:marketPlayer.values()) {
         		if (mPlayer.get(tweetDate) == null) {
@@ -199,6 +202,7 @@ public class ReadStream {
         }
     }
 
+    //Closing R
     public void exit() {
         rEngine.end();
     }

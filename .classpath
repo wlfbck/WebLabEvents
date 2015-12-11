@@ -2,7 +2,7 @@
 <classpath>
 	<classpathentry kind="src" path="src"/>
 	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.8"/>
-	<classpathentry kind="lib" path="JRI.jar" sourcepath="/Library/Frameworks/R.framework/Versions/3.2/Resources/library/rJava/java/">
+	<classpathentry kind="lib" path="/Users/Christian/EclipseWorkspace/git/WebLabEvents/libs/jri/JRI.jar" sourcepath="/Library/Frameworks/R.framework/Versions/3.2/Resources/library/rJava/java/">
 		<attributes>
 			<attribute name="javadoc_location" value="file:/Library/Frameworks/R.framework/Versions/3.2/Resources/library/rJava/javadoc/"/>
 		</attributes>

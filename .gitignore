@@ -6,3 +6,5 @@
 .classpath
 build.xml
 /dist/
+.DS_Store
+/bin/
