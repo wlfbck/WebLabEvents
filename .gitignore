@@ -1,10 +1,10 @@
-/nbproject/private/
-/nbproject
-/build/
-/.settings/
+nbproject/private/
+nbproject
+build/
+.settings/
 .project
 .classpath
 build.xml
-/dist/
+dist/
 .DS_Store
-/bin/
+bin/
