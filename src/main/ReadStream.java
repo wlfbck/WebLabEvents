@@ -13,6 +13,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Locale;
 import java.util.TreeMap;
+import org.rosuda.JRI.REXP;
 import org.rosuda.JRI.Rengine;
 
 /*
@@ -34,7 +35,7 @@ public class ReadStream {
 
     //R engine to buildSum r code within Java. Replacing "null" with "new TextConsole()" will display the R console output 
     String[] rArgs = {"--no-save"};
-    Rengine rEngine = new Rengine(rArgs, false, new TextConsole());
+    Rengine rEngine = new Rengine(rArgs, false, null);
 
     //time window in minutes in which tweets get aggregated
     int tweetSumWindow;
@@ -51,8 +52,20 @@ public class ReadStream {
             System.exit(0);
         }
         rEngine.eval("library(forecast)");
+        rEngine.eval("capture = function(data) {message=capture.output(auto.arima(data),type=\"message\")}");
 
-        //
+//        rEngine.eval("testt <- c(826,816,839,995,697)");
+//        rEngine.eval("testend <- c(2015,164)");
+//        rEngine.eval("testseries <- ts(testt,end=testend,frequency=365)");
+//        
+//        REXP x = rEngine.eval("capture(testseries)");
+//        System.out.println("LOLLOLOLOl");
+//        String[] errors = x.asStringArray();
+//        System.out.println(errors.length);
+//        for(int i = 0; i < errors.length; i++) {
+//            System.out.println(errors[i]);
+//        }
+
         this.tweetSumWindow = 60;
         this.dataWindow = 5;
         this.numberOfSumOfSums = 24;
@@ -145,6 +158,13 @@ public class ReadStream {
         int currentWindow = (ldt.getDayOfYear() * 24 * 60 + ldt.getHour() + ldt.getMinute() - tweetSumWindow) / (tweetSumWindow * numberOfSumOfSums);
         rEngine.eval("endDate <- c(" + ldt.getYear() + "," + currentWindow + ")");
         rEngine.eval("tseries <- ts(v, end=endDate,frequency=" + f + ")");
+        
+        REXP x = rEngine.eval("capture(tseries)");
+        if (x.asStringArray().length > 0) {
+            System.out.println("data is non-stationary, cannot apply ARIMA, skipping dataset");
+            return;
+        }
+        
         rEngine.eval("subForecast <- forecast(auto.arima(tseries),h=1)");
         double[] upperLimit = rEngine.eval("subForecast$upper").asDoubleArray();
         //high95 check
@@ -159,7 +179,6 @@ public class ReadStream {
             rEngine.eval("points(endDate[1]+endDate[2]/" + f + "," + dataWindowValues[dataWindowValues.length - 1] + ",pch=19,col='red')");
             rEngine.eval("dev.off()");
         }
-
     }
 
     //building more coarse dataset
@@ -185,11 +204,12 @@ public class ReadStream {
 
     //Calculating daily sums of tweets for each hashtag
     public void addToTweetSums(Tweet t) {
-        //Building a string of the tweetDate     	
+        //Building a string of the tweetDate
         long tweetDateL = t.getTweetDate().toEpochSecond(ZoneOffset.UTC) / (60 * tweetSumWindow);
 
         //each new timeunit, we have to insert empty values for all marketplayer
         if (currentDate != tweetDateL) {
+            System.out.println(LocalDateTime.ofEpochSecond(currentDate * 60 * tweetSumWindow, 0, ZoneOffset.UTC));
             for (TreeMap<Long, Integer> mPlayer : marketPlayer.values()) {
                 if (mPlayer.get(tweetDateL) == null) {
                     mPlayer.put(tweetDateL, 0);
@@ -248,12 +268,12 @@ public class ReadStream {
             tweetHashtag = new HashSet<>(Arrays.asList(tweetHashtag)).toArray(new String[0]);
 
             //Parse the tweet text
-            String tweetText = tweetData[3];
+            //String tweetText = tweetData[3];
 
             //Just store vaild tweets in the "tweetList"
             if (tweetHashtag.length > 0 && !tweetHashtag[0].equals("")) {
                 //Creating a new tweet
-                Tweet t = new Tweet(tweetId, tweetDate, tweetHashtag, tweetText);
+                Tweet t = new Tweet(tweetId, tweetDate, tweetHashtag, null);
                 //Add tweet to tweetList
                 tweetList.add(t);
             }
