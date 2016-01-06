@@ -8,3 +8,4 @@ build.xml
 dist/
 .DS_Store
 bin/
+preprocessedTweets_oct2014_until_dec2015_aapl_amzn_fb.txt
