@@ -17,6 +17,27 @@ import org.rosuda.JRI.REXP;
 import org.rosuda.JRI.Rengine;
 
 /*
+POSSIBLE THINGS TO DO:
+for the current window the arima model doesn't change (only on changing windows the model changes),
+so one only has to construct a model once for each window and then just see if the threshold gets broken
+with each tweet (much faster, no downsides?)
+
+ignore bad arima models and just continue (faster, but prolly errorneous)
+
+increase datawindow to prevent bad arima models (slower because windowsize, but faster cause no double calls)
+
+dont check for every tweet but for every i-th (increasingly faster)
+
+port arima and automodelling to java (HUGE time investment but probably huge speedup and a lot of things get easier)
+
+TODO:
+implement eventlist or other output and skip all regular output and image generation
+
+integrate into apache storm pipeline
+
+*/
+
+/*
  * Bedingungen für einen erfolgreichen Durchlauf:
  * Keine Zeilenumbrüche in der Tweetdatei - Eine Zeile, ein Tweet!
  * Tweets liegen in zeitlich sortierter Reihenfolge vor
