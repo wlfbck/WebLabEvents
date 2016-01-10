@@ -18,10 +18,6 @@ import org.rosuda.JRI.Rengine;
 
 /*
 POSSIBLE THINGS TO DO:
-for the current window the arima model doesn't change (only on changing windows the model changes),
-so one only has to construct a model once for each window and then just see if the threshold gets broken
-with each tweet (much faster, no downsides?)
-
 ignore bad arima models and just continue (faster, but prolly errorneous)
 
 increase datawindow to prevent bad arima models (slower because windowsize, but faster cause no double calls)
@@ -35,19 +31,14 @@ implement eventlist or other output and skip all regular output and image genera
 
 integrate into apache storm pipeline
 
-*/
-
-/*
- * Bedingungen für einen erfolgreichen Durchlauf:
- * Keine Zeilenumbrüche in der Tweetdatei - Eine Zeile, ein Tweet!
- * Tweets liegen in zeitlich sortierter Reihenfolge vor
  */
 public class ReadStream {
 
     //List to store every single tweet as Tweet
     LinkedList<Tweet> tweetList = new LinkedList<>();
 
-    //List to store the daily sum of tweets for each hashtag
+    //List to store the sum of tweets for each hashtag
+    //each unit in here has the length of tweetSumWindow
     TreeMap<String, TreeMap<Long, Integer>> marketPlayer = new TreeMap<>();
 
     //Start and current "date" for counting tweets in tweetSumWindow
@@ -65,6 +56,9 @@ public class ReadStream {
     //units of time to look back on - in evalWindow units
     int dataWindow;
 
+    //Marketplayers to look for
+    String[] stockSymbols;
+
     //ReadStream constructor 
     public ReadStream() throws IOException {
         //Test if R is running 
@@ -75,21 +69,11 @@ public class ReadStream {
         rEngine.eval("library(forecast)");
         rEngine.eval("capture = function(data) {message=capture.output(auto.arima(data),type=\"message\")}");
 
-//        rEngine.eval("testt <- c(826,816,839,995,697)");
-//        rEngine.eval("testend <- c(2015,164)");
-//        rEngine.eval("testseries <- ts(testt,end=testend,frequency=365)");
-//        
-//        REXP x = rEngine.eval("capture(testseries)");
-//        System.out.println("LOLLOLOLOl");
-//        String[] errors = x.asStringArray();
-//        System.out.println(errors.length);
-//        for(int i = 0; i < errors.length; i++) {
-//            System.out.println(errors[i]);
-//        }
-
         this.tweetSumWindow = 60;
         this.dataWindow = 5;
         this.numberOfSumOfSums = 24;
+
+        stockSymbols = new String[]{"AMZN"};
     }
 
     //Trying to find events, counting daily tweet sums for each hashtag and than calling Rs auto arima function
@@ -100,20 +84,22 @@ public class ReadStream {
         startDate = tweetD.toEpochSecond(ZoneOffset.UTC) / (60 * tweetSumWindow);
         currentDate = startDate;
 
-        //Time ordering tweets 
-        Collections.sort(tweetList, (final Tweet lhs, Tweet rhs) -> lhs.getTweetDate().compareTo(rhs.getTweetDate()));
-
         //Counting daily tweet sums for each hashtag
         for (Tweet t : tweetList) {
-            addToTweetSums(t);
-            detectEventForTweet("AMZN");
+            boolean dateHasChanged = addToTweetSums(t);
+            for (String symbol : stockSymbols) {
+                if (dateHasChanged) {
+                    calculateCurrentModelForMarketplayer(symbol);
+                }
+                detectEventForTweet(symbol);
+            }
         }
-        //detectEventForMarketplayer("AMZN");
+        //detectEventsForMarketplayer("AMZN");
     }
 
     //Detection on a per day basis.
     //Plots whole timeline with 20day forecast.
-    public void detectEventForMarketplayer(String stockSymbol) {
+    public void detectEventsForMarketplayer(String stockSymbol) {
         //Convert dailySum into a vector
         int[] sumVector = marketPlayer.get(stockSymbol).values().stream().mapToInt(i -> i).toArray();
         int shrinkageFactor = 24 * 60 / tweetSumWindow;
@@ -165,6 +151,34 @@ public class ReadStream {
     }
 
     public void detectEventForTweet(String stockSymbol) {
+        REXP r = rEngine.eval("subForecast" + stockSymbol + "$upper");
+        if(r==null) {
+            return;
+        }
+        double[] upperLimit = r.asDoubleArray();
+        double actualValue = getLastDataValue(stockSymbol);
+
+        //high95 check
+        if (upperLimit[1] < actualValue) {
+            int timeFactor = (24 * 60) / (tweetSumWindow * numberOfSumOfSums);
+            int f = 365 * timeFactor;
+            LocalDateTime ldt = LocalDateTime.ofEpochSecond(currentDate * 60 * tweetSumWindow, 0, ZoneOffset.UTC);
+            int currentWindow = (ldt.getDayOfYear() * 24 * 60 + ldt.getHour() + ldt.getMinute() - tweetSumWindow) / (tweetSumWindow * numberOfSumOfSums);
+            
+            System.out.println("\nEvent (?)at " + ldt + ":");
+            System.out.println("Forecast: " + rEngine.eval("as.numeric(subForecast" + stockSymbol + "$mean)").asDouble());
+            System.out.println("UpperLimit95: " + upperLimit[1]);
+            System.out.println("Actual: " + actualValue);
+
+            rEngine.eval("jpeg('" + stockSymbol + currentWindow + ".jpeg',width=1440,height=900)");
+            rEngine.eval("plot(subForecast" + stockSymbol + ",ylim=c(min(min(subForecast" + stockSymbol + "$lower),min(subForecast" + stockSymbol + "$x)),max(" + actualValue + ",max(subForecast" + stockSymbol + "$x))))");
+            rEngine.eval("points(endDate[1]+endDate[2]/" + f + "," + actualValue + ",pch=19,col='red')");
+            rEngine.eval("dev.off()");
+        }
+    }
+
+    //calculates model for given stocksymbol and saves the forecast in R under 'subForecast'+stockSymbol
+    public void calculateCurrentModelForMarketplayer(String stockSymbol) {
         int[] dataWindowValues = getDataset(stockSymbol);
         if (dataWindowValues == null) {
             return;//not enough values yet
@@ -179,27 +193,14 @@ public class ReadStream {
         int currentWindow = (ldt.getDayOfYear() * 24 * 60 + ldt.getHour() + ldt.getMinute() - tweetSumWindow) / (tweetSumWindow * numberOfSumOfSums);
         rEngine.eval("endDate <- c(" + ldt.getYear() + "," + currentWindow + ")");
         rEngine.eval("tseries <- ts(v, end=endDate,frequency=" + f + ")");
-        
+
         REXP x = rEngine.eval("capture(tseries)");
         if (x.asStringArray().length > 0) {
             System.out.println("data is non-stationary, cannot apply ARIMA, skipping dataset");
             return;
         }
-        
-        rEngine.eval("subForecast <- forecast(auto.arima(tseries),h=1)");
-        double[] upperLimit = rEngine.eval("subForecast$upper").asDoubleArray();
-        //high95 check
-        if (upperLimit[1] < dataWindowValues[dataWindowValues.length - 1]) {
-            System.out.println("\nEvent (?)at " + ldt + ":");
-            System.out.println("Forecast: " + rEngine.eval("as.numeric(subForecast$mean)").asDouble());
-            System.out.println("UpperLimit95: " + upperLimit[1]);
-            System.out.println("Actual: " + dataWindowValues[dataWindowValues.length - 1]);
 
-            rEngine.eval("jpeg('" + stockSymbol + currentWindow + ".jpeg',width=1440,height=900)");
-            rEngine.eval("plot(subForecast,ylim=c(min(min(subForecast$lower),min(subForecast$x)),max(" + dataWindowValues[dataWindowValues.length - 1] + ",max(subForecast$x))))");
-            rEngine.eval("points(endDate[1]+endDate[2]/" + f + "," + dataWindowValues[dataWindowValues.length - 1] + ",pch=19,col='red')");
-            rEngine.eval("dev.off()");
-        }
+        rEngine.eval("subForecast" + stockSymbol + " <- forecast(auto.arima(tseries),h=1)");
     }
 
     //building more coarse dataset
@@ -223,8 +224,28 @@ public class ReadStream {
         return retSet;
     }
 
+    public int getLastDataValue(String stockSymbol) {
+        int[] dataset = marketPlayer.get(stockSymbol).values().stream().mapToInt(i -> i).toArray();
+
+        //not enough data yet
+        //+1 because we want to forcast for the current window, therefore we ignore the current. 
+        if ((dataset.length - numberOfSumOfSums) < 0) {
+            return -1;
+        }
+
+        int retValue = 0;
+        int startVal = dataset.length - numberOfSumOfSums;
+        for (int i = startVal; i < dataset.length; i++) {
+            retValue += dataset[i];
+        }
+
+        return retValue;
+    }
+
     //Calculating daily sums of tweets for each hashtag
-    public void addToTweetSums(Tweet t) {
+    //returns whether the currentDate changed or not
+    public boolean addToTweetSums(Tweet t) {
+        boolean dateHasChanged = false;
         //Building a string of the tweetDate
         long tweetDateL = t.getTweetDate().toEpochSecond(ZoneOffset.UTC) / (60 * tweetSumWindow);
 
@@ -237,6 +258,7 @@ public class ReadStream {
                 }
             }
             currentDate = tweetDateL;
+            dateHasChanged = true;
         }
 
         String[] hash = t.getTweetHashtag();
@@ -252,6 +274,8 @@ public class ReadStream {
                 marketPlayer.get(h).put(currentDate, 1);
             }
         }
+
+        return dateHasChanged;
     }
 
     //Reading tweets from file, parsing them "Tweets" and store them in the "tweetList"
@@ -290,7 +314,6 @@ public class ReadStream {
 
             //Parse the tweet text
             //String tweetText = tweetData[3];
-
             //Just store vaild tweets in the "tweetList"
             if (tweetHashtag.length > 0 && !tweetHashtag[0].equals("")) {
                 //Creating a new tweet
@@ -302,6 +325,9 @@ public class ReadStream {
         }
         //Finished reading, closing BufferedReader
         br.close();
+
+        //Time ordering tweets 
+        Collections.sort(tweetList, (final Tweet lhs, Tweet rhs) -> lhs.getTweetDate().compareTo(rhs.getTweetDate()));
     }
 
     //Closing R
