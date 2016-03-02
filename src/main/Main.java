@@ -13,7 +13,7 @@ public class Main {
         //preprocessedTweets_july_2015_AMZN
         //preprocessedTweets_june_july_2015_AMZN_selection
         //preprocessedTweets_oct2014_until_dec2015_aapl_amzn_fb
-        rs.readTweets("preprocessedTweets_june_july_2015_AMZN_cleaned.txt");
+        rs.readTweets("preprocessedTweets_oct2014_until_dec2015_aapl_amzn_fb.txt");
 
         //Start event detection
         System.out.println("Processing Tweets...");
